@@ -5,7 +5,8 @@ import authRoutes from './routes/auth.routes.js';
 import poolRoutes from './routes/pool.routes.js';
 import productRoutes from './routes/product.routes.js';
 import walletRoutes from './routes/wallet.routes.js';
-import paymentRoutes from './routes/payment.routes.js'
+import paymentRoutes from './routes/payment.routes.js';
+import distanceRoutes from './routes/distance.routes.js';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('api/pools',poolRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/distance', distanceRoutes);
 app.use('/api/payment', paymentRoutes);
 
 app.use((err, req, res, next) => {
