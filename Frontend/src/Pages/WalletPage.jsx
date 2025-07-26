@@ -1,23 +1,54 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { walletService } from '../api/services';
+import TransactionList from '../components/features/wallet/TransactionList';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const WalletPage = () => {
-  const [balance] = useState(1250);
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [addingFunds, setAddingFunds] = useState(false);
 
-  const handleAddFunds = () => {
-    console.log('Add funds clicked');
-    // Handle add funds logic here
+  useEffect(() => {
+    fetchWalletData();
+  }, []);
+
+  const fetchWalletData = async () => {
+    try {
+      setLoading(true);
+      const [balanceRes, transactionsRes] = await Promise.all([
+        walletService.getBalance(),
+        walletService.getTransactions()
+      ]);
+      setBalance(balanceRes.data.balance);
+      setTransactions(transactionsRes.data);
+    } catch (err) {
+      setError('Failed to fetch wallet data');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleViewTransactions = () => {
-    console.log('View transactions clicked');
-    // Handle view transactions logic here
+  const handleAddFunds = async (e) => {
+    e.preventDefault();
+    if (!amount || isNaN(amount)) return;
+
+    try {
+      setAddingFunds(true);
+      await walletService.addFunds(Number(amount));
+      await fetchWalletData();
+      setAmount('');
+    } catch (err) {
+      setError('Failed to add funds');
+    } finally {
+      setAddingFunds(false);
+    }
   };
 
-  const handleApplyMicroCredit = () => {
-    console.log('Apply for micro-credit clicked');
-    // Handle micro-credit application logic here
-  };
+  if (loading) return <LoadingSpinner />;
 
   return (
     <div className="relative flex size-full min-h-screen flex-col bg-[#fcfaf8] group/design-root overflow-x-hidden" style={{ fontFamily: '"Plus Jakarta Sans", "Noto Sans", sans-serif' }}>
@@ -83,49 +114,41 @@ const WalletPage = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-stretch">
-              <div className="flex flex-1 gap-3 flex-wrap px-4 py-3 justify-between">
-                <button
-                  onClick={handleAddFunds}
-                  className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#e87d30] text-[#1b130e] text-sm font-bold leading-normal tracking-[0.015em] hover:bg-[#d6721f] transition-colors"
-                >
-                  <span className="truncate">Add Funds</span>
-                </button>
-                <button
-                  onClick={handleViewTransactions}
-                  className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 bg-[#f3ece7] text-[#1b130e] text-sm font-bold leading-normal tracking-[0.015em] hover:bg-[#e87d30] hover:text-white transition-colors"
-                >
-                  <span className="truncate">View Transactions</span>
-                </button>
+            {/* Add Funds Form */}
+            <div className="p-4">
+              <div className="flex flex-col gap-4 rounded-xl bg-white p-6 shadow">
+                <h3 className="text-[#1b130e] text-[22px] font-bold leading-tight tracking-[-0.015em]">Add Funds</h3>
+                <form onSubmit={handleAddFunds} className="flex gap-2">
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="p-2 border rounded focus:ring-2 focus:ring-orange-500"
+                    min="100"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={addingFunds}
+                    className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 disabled:bg-gray-400"
+                  >
+                    {addingFunds ? 'Adding...' : 'Add Funds'}
+                  </button>
+                </form>
               </div>
             </div>
 
-            {/* Micro-Credit Eligibility Section */}
-            <h2 className="text-[#1b130e] text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Micro-Credit Eligibility</h2>
-            <div className="p-4">
-              <div className="flex items-stretch justify-between gap-4 rounded-xl">
-                <div className="flex flex-[2_2_0px] flex-col gap-4">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-[#1b130e] text-base font-bold leading-tight">You are eligible for micro-credits</p>
-                    <p className="text-[#976d4e] text-sm font-normal leading-normal">
-                      Unlock financial support to grow your business. Apply now for micro-credits tailored for street food vendors.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleApplyMicroCredit}
-                    className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-8 px-4 flex-row-reverse bg-[#f3ece7] text-[#1b130e] text-sm font-medium leading-normal w-fit hover:bg-[#e87d30] hover:text-white transition-colors"
-                  >
-                    <span className="truncate">Apply Now</span>
-                  </button>
-                </div>
-                <div
-                  className="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex-1"
-                  style={{
-                    backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuC8fMQzrRfriERMKqtAmhPqwoxoULTYo0tq7X-DidUmoAwO8ROfwX7CLZLB4SAXN1IXc5BF7pSRZv_5z_ksgIP6MYeq7H9mkezvcU9Mv1__dFtcRtLtHARx3LIP1so4Aa6riVN87W43cPWGyZUHBhEbaYi93nVfzx2-xM6mdg0nBYHAVp76601gFGQuMAooIZnPGnKLBvCEjDVEM2M2HYQwhSv6hU8VMGJhPrwtsZ9Sfhe8iojYtby71M2HbHLEw5ix8JI3LmaODdgI")'
-                  }}
-                />
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                {error}
               </div>
+            )}
+
+            {/* Transaction History */}
+            <div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Transaction History</h3>
+              <TransactionList transactions={transactions} />
             </div>
           </div>
         </div>

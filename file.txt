@@ -1,0 +1,40 @@
+src/
+├── api/
+│   └── services.js         # All API calls using Axios
+├── components/
+│   ├── common/
+│   │   ├── LoadingSpinner.jsx
+│   │   ├── ErrorMessage.jsx
+│   │   ├── Button.jsx
+│   │   └── Card.jsx
+│   ├── layout/
+│   │   ├── Navbar.jsx
+│   │   ├── Footer.jsx
+│   │   └── ProtectedRoute.jsx
+│   └── features/
+│       ├── marketplace/
+│       │   ├── ProductCard.jsx
+│       │   └── ProductList.jsx
+│       ├── pools/
+│       │   ├── PoolCard.jsx
+│       │   └── PoolList.jsx
+│       └── wallet/
+│           ├── Balance.jsx
+│           └── TransactionList.jsx
+├── contexts/
+│   ├── AuthContext.jsx
+│   └── WalletContext.jsx
+├── hooks/
+│   ├── useAuth.js
+│   └── useWallet.js
+├── pages/
+│   ├── AuthPage.jsx
+│   ├── HomePage.jsx
+│   ├── MarketplacePage.jsx
+│   ├── PoolPage.jsx
+│   ├── WalletPage.jsx
+│   ├── ProfilePage.jsx
+│   └── MapPage.jsx
+└── utils/
+    ├── constants.js
+    └── helpers.js
