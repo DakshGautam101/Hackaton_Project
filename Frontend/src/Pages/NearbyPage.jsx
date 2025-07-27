@@ -42,8 +42,8 @@ const Nearby = () => {
 
   const fetchNearbyUsers = async (lat, lng) => {
     try {
-      const vendorRes = await fetch(`http://localhost:5000/api/distance/nearby?lat=${lat}&lng=${lng}&role=Vendor`);
-      const supplierRes = await fetch(`http://localhost:5000/api/distance/nearby?lat=${lat}&lng=${lng}&role=Supplier`);
+      const vendorRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/distance/nearby?lat=${lat}&lng=${lng}&role=Vendor`);
+      const supplierRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/distance/nearby?lat=${lat}&lng=${lng}&role=Supplier`);
 
       const vendorData = await vendorRes.json();
       const supplierData = await supplierRes.json();
@@ -91,7 +91,7 @@ const Nearby = () => {
           // Send location to backend
           try {
             const token = localStorage.getItem('token');
-            await fetch('http://localhost:5000/api/auth/update-location', {
+            await fetch('${import.meta.env.}/auth/update-location', {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',

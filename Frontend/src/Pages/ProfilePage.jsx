@@ -31,8 +31,8 @@ const ProfilePage = () => {
         setLoading(true);
         const headers = { Authorization: `Bearer ${token}` };
 
-        const profileRes = await fetch('http://localhost:5000/api/profile', { headers });
-        
+        const profileRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/profile`, { headers });
+
         if (!profileRes.ok) {
           throw new Error('Failed to fetch profile data');
         }
