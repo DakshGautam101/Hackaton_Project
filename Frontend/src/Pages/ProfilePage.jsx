@@ -1,184 +1,227 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { userService } from '../api/services';
-import LoadingSpinner from '../components/common/LoadingSpinner';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  ChefHat, User, Mail, Phone, MapPin, Calendar, Star,
+  TrendingUp, Users, ShoppingCart, Pencil, LogOut, Loader2
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const ProfilePage = () => {
-  const { user } = useAuth();
-  const [profile, setProfile] = useState(null);
+  const navigate = useNavigate();
+  const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    username: '',
-    phone: '',
-    address: '',
-    description: ''
-  });
+
+  const getAddressFromCoordinates = async (lat, lng) => {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+    );
+    const data = await response.json();
+    return data.display_name || "Address not found";
+  };
 
   useEffect(() => {
-    fetchProfile();
-  }, []);
+    const fetchData = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
 
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
-      const { data } = await userService.getProfile();
-      setProfile(data);
-      setFormData({
-        username: data.username,
-        phone: data.phone,
-        address: data.address || '',
-        description: data.description || ''
-      });
-    } catch (err) {
-      setError('Failed to fetch profile data');
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        setLoading(true);
+        const headers = { Authorization: `Bearer ${token}` };
 
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    try {
-      await userService.updateProfile(formData);
-      await fetchProfile();
-      setEditing(false);
-    } catch (err) {
-      setError('Failed to update profile');
-    }
-  };
+        const profileRes = await fetch('http://localhost:5000/api/profile', { headers });
+        
+        if (!profileRes.ok) {
+          throw new Error('Failed to fetch profile data');
+        }
 
-  if (loading) return <LoadingSpinner />;
+        const profileJson = await profileRes.json();
+        
+        if (profileJson.success) {
+          const user = profileJson.user;
+          setProfileData({
+            name: user.username,
+            email: user.email,
+            phone: user.phone,
+            location: user.location?.coordinates ? 
+              await getAddressFromCoordinates(user.location.coordinates[1], user.location.coordinates[0]) : 'Unknown location',
+            businessName: user.businessName || 'Not specified',
+            businessType: user.businessType || 'Not specified',
+            joinedDate: new Date(user.joinedDate).toLocaleDateString(),
+            bio: user.bio || 'No bio provided',
+            image: user.imageUrl,
+            rating: user.rating,
+            wallet: user.wallet,
+            role: user.role
+          });
+        } else {
+          throw new Error('Failed to load profile data');
+        }
+      } catch (err) {
+        console.error("API error:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+          <p className="mt-4 text-gray-600 text-lg">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <div className="max-w-md p-6 bg-white rounded-xl shadow-md text-center">
+          <h2 className="text-xl font-semibold text-red-600 mb-2">Error Loading Profile</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profileData) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <p className="text-gray-600 text-lg">No profile data found</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative flex size-full min-h-screen flex-col bg-[#fcfaf8]">
-      <div className="layout-container flex h-full grow flex-col">
-        <header className="flex items-center justify-between border-b border-[#f3ece7] px-10 py-3">
-          <Link to="/" className="flex items-center gap-4 text-[#1b130e]">
-            <div className="size-4">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z" fill="currentColor"/>
-              </svg>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+          <button
+            onClick={() => {
+              localStorage.removeItem('token');
+              navigate('/login');
+            }}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Profile Card */}
+          <div className="bg-white overflow-hidden shadow rounded-lg lg:col-span-2">
+            <div className="px-6 py-5 border-b border-gray-200">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">Personal Information</h3>
             </div>
-            <h2 className="text-lg font-bold hover:text-[#e87d30]">Street Eats</h2>
-          </Link>
-        </header>
-
-        <div className="px-40 flex flex-1 justify-center py-5">
-          <div className="max-w-[960px] flex-1 space-y-6">
-            {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                {error}
-              </div>
-            )}
-
-            <div className="bg-white rounded-xl shadow p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-[#1b130e]">Profile</h1>
-                <button
-                  onClick={() => setEditing(!editing)}
-                  className="text-orange-500 hover:text-orange-600"
-                >
-                  {editing ? 'Cancel' : 'Edit Profile'}
-                </button>
-              </div>
-
-              {editing ? (
-                <form onSubmit={handleUpdate} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                    <input
-                      type="text"
-                      value={formData.username}
-                      onChange={(e) => setFormData({...formData, username: e.target.value})}
-                      className="mt-1 p-2 w-full border rounded focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Phone</label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      className="mt-1 p-2 w-full border rounded focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Address</label>
-                    <textarea
-                      value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
-                      className="mt-1 p-2 w-full border rounded focus:ring-2 focus:ring-orange-500"
-                      rows="3"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Description</label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      className="mt-1 p-2 w-full border rounded focus:ring-2 focus:ring-orange-500"
-                      rows="3"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-orange-500 text-white py-2 rounded hover:bg-orange-600"
-                  >
-                    Save Changes
-                  </button>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <img
-                      src={profile.avatar || 'https://via.placeholder.com/100'}
-                      alt="Profile"
-                      className="w-20 h-20 rounded-full"
-                    />
-                    <div>
-                      <h2 className="text-xl font-semibold">{profile.username}</h2>
-                      <p className="text-gray-600">{profile.role}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-6">
-                    <div>
-                      <p className="text-sm text-gray-500">Email</p>
-                      <p>{profile.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Phone</p>
-                      <p>{profile.phone}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-sm text-gray-500">Address</p>
-                      <p>{profile.address || 'Not provided'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-sm text-gray-500">Description</p>
-                      <p>{profile.description || 'No description provided'}</p>
-                    </div>
-                  </div>
-
-                  {profile.role === 'Supplier' && (
-                    <div className="mt-6">
-                      <h3 className="text-lg font-semibold mb-2">Ratings & Reviews</h3>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-2xl text-yellow-500">★</span>
-                        <span className="text-xl font-bold">{profile.rating || '0'}</span>
-                        <span className="text-gray-500">({profile.reviewCount || '0'} reviews)</span>
-                      </div>
-                    </div>
+            <div className="px-6 py-5">
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="flex-shrink-0">
+                  <img 
+                    src={profileData.image || 'https://placehold.co/200x200'} 
+                    alt={profileData.name} 
+                    className="h-32 w-32 rounded-full object-cover border-4 border-white shadow-md"
+                  />
+                </div>
+                <div className="mt-4 sm:mt-0 text-center sm:text-left">
+                  <h2 className="text-2xl font-bold text-gray-900">{profileData.name}</h2>
+                  <p className="text-gray-500">{profileData.role}</p>
+                  {profileData.businessName && (
+                    <p className="mt-1 text-gray-600">{profileData.businessName}</p>
                   )}
                 </div>
-              )}
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-start">
+                  <Mail className="flex-shrink-0 h-5 w-5 text-gray-500 mt-0.5" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Email</p>
+                    <p className="text-sm text-gray-900">{profileData.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Phone className="flex-shrink-0 h-5 w-5 text-gray-500 mt-0.5" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Phone</p>
+                    <p className="text-sm text-gray-900">{profileData.phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <MapPin className="flex-shrink-0 h-5 w-5 text-gray-500 mt-0.5" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Location</p>
+                    <p className="text-sm text-gray-900">{profileData.location}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Calendar className="flex-shrink-0 h-5 w-5 text-gray-500 mt-0.5" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Member Since</p>
+                    <p className="text-sm text-gray-900">{profileData.joinedDate}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Star className="flex-shrink-0 h-5 w-5 text-gray-500 mt-0.5" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Rating</p>
+                    <p className="text-sm text-gray-900">{profileData.rating}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <TrendingUp className="flex-shrink-0 h-5 w-5 text-gray-500 mt-0.5" />
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-gray-500">Wallet Balance</p>
+                    <p className="text-sm text-gray-900">₹{profileData.wallet}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Business Info */}
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="px-6 py-5 border-b border-gray-200">
+              <h3 className="text-lg font-medium leading-6 text-gray-900">Business Information</h3>
+            </div>
+            <div className="px-6 py-5">
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Business Type</p>
+                  <p className="text-sm text-gray-900 mt-1">{profileData.businessType}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Business Name</p>
+                  <p className="text-sm text-gray-900 mt-1">{profileData.businessName}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">About</p>
+                  <p className="text-sm text-gray-900 mt-1">{profileData.bio}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

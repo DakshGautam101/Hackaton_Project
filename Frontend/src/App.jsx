@@ -1,39 +1,75 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Navbar from './components/layout/Navbar.jsx';
-import ProtectedRoute from './components/Layout/ProtectedRoute.jsx';
-import AuthPage from './Pages/AuthPage.jsx';
-import HomePage from './Pages/HomePage.jsx';
-import MarketplacePage from './pages/MarketPlace.jsx';
-import PoolPage from './Pages/PoolPage.jsx';
-import WalletPage from './Pages/WalletPage.jsx';
-import ProfilePage from './Pages/ProfilePage.jsx';
-import MapPage from './Pages/MapPage.jsx';
-import Footer from './components/Layout/Footer.jsx';
+import { AuthProvider } from './contexts/AuthContext.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
+import { HomePage } from './pages/HomePage.jsx';
+import AuthPage from './pages/AuthPage.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import About from './pages/About.jsx';
+import Contact from './pages/Contact.jsx';
+import MarketPlace from './pages/MarketPlace.jsx';
+import CreatePool from './pages/CreatePool.jsx';
+import PoolPage from './pages/PoolPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
+import WalletPage from './pages/WalletPage.jsx';
+import AddProduct from './pages/AddProduct.jsx';
+import ProductPage from './pages/ProductPage.jsx';
+import Nearby from './pages/NearbyPage.jsx';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-orange-500">
-        <Navbar />
-        <main className="container mx-auto px-4 py-8">
+      <AuthProvider>
+        <div className="min-h-screen">
           <Routes>
+            <Route path="/" element={<HomePage />} />
             <Route path="/auth" element={<AuthPage />} />
-            
-            <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/marketplace" element={<MarketplacePage />} />
-              <Route path="/map" element={<MapPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRoles={['Vendor']} />}>
-              <Route path="/pools" element={<PoolPage />} />
-              <Route path="/wallet" element={<WalletPage />} />
-            </Route>
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/marketplace" element={<MarketPlace />} />
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/create-pool" element={
+              <ProtectedRoute>
+                <CreatePool />
+              </ProtectedRoute>
+            } />
+            <Route path="/pool/:id" element={
+              <ProtectedRoute>
+                <PoolPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/wallet" element={
+              <ProtectedRoute>
+                <WalletPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/add-product" element={
+              <ProtectedRoute>
+                <AddProduct />
+              </ProtectedRoute>
+            } />
+            <Route path="/product/:productId" element={
+              <ProtectedRoute>
+                <ProductPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/nearby" element={
+              <ProtectedRoute>
+                <Nearby />
+              </ProtectedRoute>
+            } />
           </Routes>
-        </main>
-      </div>
-      <Footer />
+        </div>
+      </AuthProvider>
     </Router>
   );
 }

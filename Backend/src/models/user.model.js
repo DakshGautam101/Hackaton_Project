@@ -7,41 +7,69 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  role :{
+  role: {
     type: String,
     enum: ['Vendor', 'Supplier'],
     default: 'Vendor',
   },
-    email: {
+  email: {
     type: String,
     required: true,
     unique: true,
-    },
-    phone :{
+  },
+  phone: {
     type: String,
     required: true,
-    },
-    password: {
+  },
+  password: {
     type: String,
     required: true,
-    },
-    profilePicture: {
+  },
+  imageUrl: {
     type: String,
-    required: false,
-    },
-    bio: {
+    default: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=300',
+  },
+  bio: {
     type: String,
-    },
-    rating:{
+    default: '',
+  },
+  rating: {
     type: Number,
     default: 0,
-    min:0,
-    max:5,
-    },
-    wallet :{
-      type: Number,
-      default: 0,
-    }
+    min: 0,
+    max: 5,
+  },
+  wallet: {
+    type: Number,
+    default: 0,
+  },
+  businessName: {
+    type: String,
+    default: '',
+  },
+  businessType: {
+    type: String,
+    default: 'Street Food Vendor',
+  },
+  location: {
+  type: {
+    type: String,
+    enum: ['Point'],
+    default: 'Point'
+  },
+  coordinates: {
+    type: [Number], // [lng, lat]
+    // required: true
+  }
+}
+,
+  joinedDate: {
+    type: Date,
+    default: Date.now,
+  }
+
 });
+
+userSchema.index({ location: '2dsphere' }); 
 
 export const User = mongoose.model('User', userSchema)|| mongoose.model('User', userSchema, 'users');

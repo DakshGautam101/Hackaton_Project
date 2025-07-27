@@ -35,3 +35,27 @@ export const requireAdmin = async (req, res, next) => {
 		next(error);
 	}
 };
+
+// Middleware to restrict access to supplier only
+export const requireSupplier = async (req, res, next) => {
+	try {
+		if (req.user.role !== 'Supplier') {
+			return res.status(403).json({ message: "Unauthorized - only suppliers can access this resource" });
+		}
+		next();
+	} catch (error) {
+		next(error);
+	}
+};
+
+// Middleware to restrict access to vendor only
+export const requireVendor = async (req, res, next) => {
+	try {
+		if (req.user.role !== 'Vendor') {
+			return res.status(403).json({ message: "Unauthorized - only vendors can access this resource" });
+		}
+		next();
+	} catch (error) {
+		next(error);
+	}
+};

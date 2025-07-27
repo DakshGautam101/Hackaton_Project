@@ -1,16 +1,19 @@
 import express from 'express';
-import { createPool, joinPool, getAllPools } from '../controllers/pool.conroller.js';
-import { protectRoute} from '../middlewares/verify.js';
+import { createPool, joinPool, getAllPools, getPoolById } from '../controllers/pool.conroller.js';
+import { protectRoute, requireVendor } from '../middlewares/verify.js';
 
 const router = express.Router();
 
-// Create a new pool (supplier)
-router.post('/', protectRoute, createPool);
+// Create a new pool - restricted to vendors only
+router.post('/', protectRoute, requireVendor, createPool);
 
-// Join a pool (vendor)
-router.post('/:poolId/join', protectRoute, joinPool);
+// Join a pool - restricted to vendors only
+router.post('/:poolId/join', protectRoute, requireVendor, joinPool);
 
-// Get all pools
-router.get('/', protectRoute, getAllPools);
+// Get all pools (public endpoint)
+router.get('/', getAllPools);
+
+// Get pool by ID (public endpoint)
+router.get('/:id', getPoolById);
 
 export default router;
