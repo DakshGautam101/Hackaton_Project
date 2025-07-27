@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChefHat, Wallet, Plus, ArrowUpRight, ArrowDownLeft, CreditCard, TrendingUp, DollarSign, Clock, CheckCircle } from 'lucide-react';
+import { ChefHat, Wallet, Plus, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { walletService, paymentService } from '../services/apiServices.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 
@@ -22,91 +22,23 @@ const WalletPage = () => {
       setLoading(true);
       const [balanceData, transactionsData] = await Promise.all([
         walletService.getWalletBalance().catch(() => ({ balance: 0 })),
-        walletService.getTransactionHistory().catch(() => ({ transactions: mockTransactions }))
+        walletService.getTransactionHistory().catch(() => ({ transactions: [] }))
       ]);
       
       setBalance(balanceData.balance || 0);
-      setTransactions(transactionsData.transactions || mockTransactions);
+      setTransactions(transactionsData.transactions || []);
     } catch (err) {
       setError('Failed to load wallet data');
       console.error('Wallet error:', err);
-      // Use mock data as fallback
-      setBalance(12450);
-      setTransactions(mockTransactions);
+      setBalance(0);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const mockTransactions = [
-    {
-      id: 1,
-      type: 'credit',
-      title: 'Pool Savings - Vegetables',
-      description: 'Bulk order savings from Fresh Vegetables Pool',
-      amount: 850,
-      date: '2024-03-10',
-      status: 'completed'
-    },
-    {
-      id: 2,
-      type: 'debit',
-      title: 'Spices Purchase',
-      description: 'Turmeric and chili powder order',
-      amount: -1200,
-      date: '2024-03-08',
-      status: 'completed'
-    },
-    {
-      id: 3,
-      type: 'credit',
-      title: 'Referral Bonus',
-      description: 'Bonus for referring Priya Sharma',
-      amount: 500,
-      date: '2024-03-05',
-      status: 'completed'
-    },
-    {
-      id: 4,
-      type: 'debit',
-      title: 'Packaging Materials',
-      description: 'Food containers and bags',
-      amount: -800,
-      date: '2024-03-03',
-      status: 'completed'
-    },
-    {
-      id: 5,
-      type: 'credit',
-      title: 'Pool Savings - Equipment',
-      description: 'Bulk order savings from Kitchen Equipment Pool',
-      amount: 1200,
-      date: '2024-03-01',
-      status: 'completed'
-    },
-    {
-      id: 6,
-      type: 'debit',
-      title: 'Monthly Subscription',
-      description: 'StreetSaver Premium membership',
-      amount: -299,
-      date: '2024-02-28',
-      status: 'completed'
-    }
-  ];
-
   const quickActions = [
-    { title: 'Add Funds', icon: Plus, action: () => setShowAddFunds(true), color: 'bg-green-500' },
-    { title: 'Request Payout', icon: ArrowUpRight, action: () => alert('Payout requested'), color: 'bg-blue-500' },
-    { title: 'View Statement', icon: CreditCard, action: () => alert('Statement downloaded'), color: 'bg-purple-500' },
-    { title: 'Auto-reload', icon: TrendingUp, action: () => alert('Auto-reload settings'), color: 'bg-orange-500' }
-  ];
-
-  const stats = [
-    { label: 'Total Earned', value: '₹45,230', icon: TrendingUp, color: 'text-green-600' },
-    { label: 'Total Spent', value: '₹32,780', icon: DollarSign, color: 'text-red-600' },
-    { label: 'This Month', value: '₹3,200', icon: Clock, color: 'text-blue-600' },
-    { label: 'Pending', value: '₹0', icon: CheckCircle, color: 'text-gray-600' }
+    { title: 'Add Funds', icon: Plus, action: () => setShowAddFunds(true), color: 'bg-green-500' }
   ];
 
   const handleAddFunds = async () => {
@@ -258,20 +190,6 @@ const WalletPage = () => {
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {stats.map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={index} className="bg-white rounded-xl shadow-sm p-6 text-center">
-                    <Icon className={`h-6 w-6 mx-auto mb-2 ${stat.color}`} />
-                    <div className="text-lg font-bold text-gray-900">{stat.value}</div>
-                    <div className="text-sm text-gray-600">{stat.label}</div>
-                  </div>
-                );
-              })}
-            </div>
-
             {/* Transactions */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
@@ -282,29 +200,37 @@ const WalletPage = () => {
               </div>
 
               <div className="space-y-4">
-                {transactions.map(transaction => {
-                  const Icon = getTransactionIcon(transaction.type);
-                  return (
-                    <div key={transaction.id} className="flex items-center justify-between p-4 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center space-x-4">
-                        <div className={`p-2 rounded-full ${transaction.type === 'credit' ? 'bg-green-100' : 'bg-red-100'}`}>
-                          <Icon className={`h-5 w-5 ${getTransactionColor(transaction.type)}`} />
+                {transactions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Wallet className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No transactions yet</p>
+                    <p className="text-gray-400 text-sm">Your transaction history will appear here</p>
+                  </div>
+                ) : (
+                  transactions.map(transaction => {
+                    const Icon = getTransactionIcon(transaction.type);
+                    return (
+                      <div key={transaction.id} className="flex items-center justify-between p-4 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center space-x-4">
+                          <div className={`p-2 rounded-full ${transaction.type === 'credit' ? 'bg-green-100' : 'bg-red-100'}`}>
+                            <Icon className={`h-5 w-5 ${getTransactionColor(transaction.type)}`} />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{transaction.title}</h4>
+                            <p className="text-gray-600 text-sm">{transaction.description}</p>
+                            <p className="text-gray-500 text-xs">{formatDate(transaction.date)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{transaction.title}</h4>
-                          <p className="text-gray-600 text-sm">{transaction.description}</p>
-                          <p className="text-gray-500 text-xs">{formatDate(transaction.date)}</p>
+                        <div className="text-right">
+                          <div className={`font-semibold ${getTransactionColor(transaction.type)}`}>
+                            {transaction.type === 'credit' ? '+' : ''}₹{Math.abs(transaction.amount).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-gray-500 capitalize">{transaction.status}</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className={`font-semibold ${getTransactionColor(transaction.type)}`}>
-                          {transaction.type === 'credit' ? '+' : ''}₹{Math.abs(transaction.amount).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-gray-500 capitalize">{transaction.status}</div>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -314,7 +240,7 @@ const WalletPage = () => {
             {/* Quick Actions */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {quickActions.map((action, index) => {
                   const Icon = action.icon;
                   return (
@@ -378,41 +304,6 @@ const WalletPage = () => {
                 </div>
               </div>
             )}
-
-            {/* Micro-Credit */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-sm p-6 text-white">
-              <h3 className="text-lg font-semibold mb-2">Micro-Credit Available</h3>
-              <p className="text-blue-100 text-sm mb-4">
-                Get instant credit up to ₹10,000 for your business needs
-              </p>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-blue-100 text-sm">Available Credit</p>
-                  <p className="text-xl font-bold">₹8,500</p>
-                </div>
-                <CreditCard className="h-8 w-8 text-blue-200" />
-              </div>
-              <button className="w-full bg-white text-blue-600 py-2 px-4 rounded-lg font-semibold hover:bg-blue-50 transition-colors">
-                Apply Now
-              </button>
-            </div>
-
-            {/* Savings Goal */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Savings Goal</h3>
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span>₹3,200 of ₹5,000</span>
-                  <span>64%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gradient-to-r from-orange-500 to-amber-500 h-3 rounded-full" style={{ width: '64%' }}></div>
-                </div>
-              </div>
-              <p className="text-gray-600 text-sm">
-                You're doing great! ₹1,800 more to reach your goal.
-              </p>
-            </div>
           </div>
         </div>
       </div>

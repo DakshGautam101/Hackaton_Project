@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChefHat, Users, ShoppingCart, TrendingUp, Bell, Settings, LogOut, AlertCircle, CheckCircle, X, Package, Plus } from 'lucide-react';
+import { ChefHat, Users, ShoppingCart, TrendingUp, AlertCircle, CheckCircle, X, Package, Plus, User, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { poolService, walletService, productService } from '../services/apiServices.js';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const [pools, setPools] = useState([]);
+  const [userPools, setUserPools] = useState([]);
+  const [otherPools, setOtherPools] = useState([]);
+  const [createdPools, setCreatedPools] = useState([]);
   const [products, setProducts] = useState([]);
   const [walletBalance, setWalletBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -17,9 +20,25 @@ const Dashboard = () => {
   const [joinStatus, setJoinStatus] = useState(null); // 'success', 'error', or null
   const [joinMessage, setJoinMessage] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
   
   // Determine if user is a supplier
   const isSupplier = user?.role === 'Supplier';
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -68,6 +87,10 @@ const Dashboard = () => {
         const transformedPools = (poolsData.pools || []).map(pool => {
           const currentQuantity = pool.joinedVendors?.reduce((sum, vendor) => sum + vendor.quantity, 0) || 0;
           const pricePerKg = pool.productId?.pricePerKg || 25;
+          const isUserJoined = pool.joinedVendors?.some(vendor => 
+            (typeof vendor.vendorId === 'object' ? vendor.vendorId._id : vendor.vendorId) === user?._id
+          );
+          const isUserCreated = (typeof pool.createdBy === 'object' ? pool.createdBy._id : pool.createdBy) === user?._id;
           
           return {
             _id: pool._id,
@@ -80,12 +103,25 @@ const Dashboard = () => {
             currentQuantity: currentQuantity,
             progressPercent: Math.round((currentQuantity / pool.totalRequiredQuantity) * 100),
             productName: pool.productId?.name || 'Unknown Product',
-            totalRequiredQuantity: pool.totalRequiredQuantity
+            totalRequiredQuantity: pool.totalRequiredQuantity,
+            isUserJoined: isUserJoined,
+            isUserCreated: isUserCreated,
+            userQuantity: isUserJoined ? pool.joinedVendors?.find(vendor => 
+              (typeof vendor.vendorId === 'object' ? vendor.vendorId._id : vendor.vendorId) === user?._id
+            )?.quantity || 0 : 0
           };
         });
         
+        // Separate pools into three categories
+        const userJoinedPools = transformedPools.filter(pool => pool.isUserJoined && !pool.isUserCreated);
+        const userCreatedPools = transformedPools.filter(pool => pool.isUserCreated);
+        const availablePools = transformedPools.filter(pool => !pool.isUserJoined && !pool.isUserCreated && pool.status === 'active');
+        
         // Set pools with no mock data
-        setPools(transformedPools);
+        setPools(transformedPools); // Keep all pools for compatibility
+        setUserPools(userJoinedPools);
+        setCreatedPools(userCreatedPools);
+        setOtherPools(availablePools);
       }
     } catch (err) {
       setError('Failed to load dashboard data');
@@ -95,19 +131,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-  };
-  
-  // Display appropriate role-specific error messages
-  const displayRoleError = () => {
-    if (isSupplier) {
-      return "As a Supplier, you can't access pool creation or join pools. You can add and manage products.";
-    } else {
-      return "As a Vendor, you can't access product management. You can create and join pools.";
-    }
-  };
-  
   const openJoinPoolModal = (pool) => {
     setSelectedPool(pool);
     const defaultQuantity = 1;
@@ -134,14 +157,28 @@ const Dashboard = () => {
         return;
       }
       
+      // Join the pool (backend handles wallet deduction and transaction recording)
       const result = await poolService.joinPool(selectedPool._id, joinQuantity);
+      
+      // Update wallet balance from backend response if available
+      if (result.transaction && typeof result.transaction.balance === 'number') {
+        setWalletBalance(result.transaction.balance);
+      } else {
+        // Fallback: refresh wallet balance from backend
+        try {
+          const walletData = await walletService.getWalletBalance();
+          setWalletBalance(walletData.balance || 0);
+        } catch (walletError) {
+          console.warn('Failed to refresh wallet balance:', walletError);
+          // Last resort: update locally
+          setWalletBalance(prevBalance => Math.max(0, prevBalance - cost));
+        }
+      }
+      
       setJoinStatus('success');
       setJoinMessage(result.message || 'Successfully joined the pool!');
       
-      // Update wallet balance
-      setWalletBalance(prevBalance => prevBalance - cost);
-      
-      // Refresh pools data
+      // Refresh pools data to show updated information
       fetchDashboardData();
       
       // After 3 seconds, close the modal
@@ -151,7 +188,7 @@ const Dashboard = () => {
       }, 3000);
     } catch (err) {
       setJoinStatus('error');
-      setJoinMessage(err.message || 'Failed to join pool');
+      setJoinMessage(err.message || 'Failed to join pool. Please check your wallet balance and try again.');
     } finally {
       setJoinLoading(false);
     }
@@ -166,13 +203,59 @@ const Dashboard = () => {
               <ChefHat className="h-8 w-8 text-orange-500" />
               <span className="text-xl font-bold text-gray-900">StreetSaver</span>
             </Link>
-            <div className="flex items-center space-x-4">
-              <Bell className="h-6 w-6 text-gray-600 hover:text-orange-500 cursor-pointer" />
-              <Settings className="h-6 w-6 text-gray-600 hover:text-orange-500 cursor-pointer" />
-              <Link to="/" onClick={handleLogout} className="flex items-center text-gray-600 hover:text-orange-500">
-                <LogOut className="h-6 w-6 mr-1" />
-                Logout
+            
+            <div className="flex items-center space-x-6">
+              <Link to="/marketplace" className="text-gray-600 hover:text-orange-500 transition-colors">
+                Marketplace
               </Link>
+              <Link to="/nearby" className="text-gray-600 hover:text-orange-500 transition-colors">
+                Nearby
+              </Link>
+              
+              {/* User Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button 
+                  className="flex items-center space-x-1 text-gray-700 hover:text-orange-500 transition-colors focus:outline-none"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                >
+                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-sm font-medium">{user?.username || 'User'}</span>
+                </button>
+                
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                    <Link 
+                      to="/profile" 
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-500"
+                      onClick={() => setDropdownOpen(false)}
+                    >
+                      <User className="mr-2 h-4 w-4" />
+                      Profile
+                    </Link>
+                    <Link 
+                      to="/wallet" 
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-500"
+                      onClick={() => setDropdownOpen(false)}
+                    >
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Wallet
+                    </Link>
+                    <Link 
+                      to="/" 
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-500"
+                      onClick={() => {
+                        logout();
+                        setDropdownOpen(false);
+                      }}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -191,6 +274,60 @@ const Dashboard = () => {
           </p>
         </div>
 
+        {/* Quick Actions */}
+        <div className="bg-white rounded-lg shadow mb-8">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {isSupplier ? (
+                <>
+                  <Link 
+                    to="/add-product" 
+                    className="bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors text-center"
+                  >
+                    Add New Product
+                  </Link>
+                  <Link 
+                    to="/marketplace" 
+                    className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                  >
+                    View Marketplace
+                  </Link>
+                  <Link 
+                    to="/wallet" 
+                    className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                  >
+                    Manage Wallet
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link 
+                    to="/create-pool" 
+                    className="bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors text-center"
+                  >
+                    Create New Pool
+                  </Link>
+                  <Link 
+                    to="/marketplace" 
+                    className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                  >
+                    Browse Marketplace
+                  </Link>
+                  <Link 
+                    to="/wallet" 
+                    className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center"
+                  >
+                    Manage Wallet
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {error}
@@ -198,7 +335,7 @@ const Dashboard = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className={`grid grid-cols-1 gap-6 mb-8 ${isSupplier ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
           {isSupplier ? (
             // Supplier stats
             <>
@@ -267,9 +404,9 @@ const Dashboard = () => {
                     <Users className="h-6 w-6 text-orange-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Active Pools</p>
+                    <p className="text-sm font-medium text-gray-600">Your Pools</p>
                     <p className="text-2xl font-semibold text-gray-900">
-                      {loading ? '...' : pools.length}
+                      {loading ? '...' : userPools.length}
                     </p>
                   </div>
                 </div>
@@ -292,23 +429,13 @@ const Dashboard = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-100 rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-blue-600" />
+                    <Package className="h-6 w-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Orders</p>
-                    <p className="text-2xl font-semibold text-gray-900">24</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <ChefHat className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Savings</p>
-                    <p className="text-2xl font-semibold text-gray-900">₹12,450</p>
+                    <p className="text-sm font-medium text-gray-600">Created Pools</p>
+                    <p className="text-2xl font-semibold text-gray-900">
+                      {loading ? '...' : createdPools.length}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -388,48 +515,13 @@ const Dashboard = () => {
               <div className="space-y-6">
                 <div className="bg-white rounded-lg shadow">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-                  </div>
-                  <div className="p-6 space-y-3">
-                    <Link 
-                      to="/add-product" 
-                      className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors text-center block"
-                    >
-                      Add New Product
-                    </Link>
-                    <Link 
-                      to="/marketplace" 
-                      className="w-full border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center block"
-                    >
-                      View Marketplace
-                    </Link>
-                    <Link 
-                      to="/wallet" 
-                      className="w-full border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center block"
-                    >
-                      Manage Wallet
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200">
                     <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
                   </div>
                   <div className="p-6">
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">New order received</span>
-                        <span className="text-gray-400">1h ago</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Product price updated</span>
-                        <span className="text-gray-400">3h ago</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment received</span>
-                        <span className="text-gray-400">1d ago</span>
-                      </div>
+                    <div className="text-center py-8">
+                      <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Recent Activity</h3>
+                      <p className="text-gray-600">Your recent sales and product updates will appear here</p>
                     </div>
                   </div>
                 </div>
@@ -438,124 +530,209 @@ const Dashboard = () => {
           ) : (
             // Vendor Content
             <>
-              {/* Active Pools */}
-              <div className="lg:col-span-2">
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">Your Active Pools</h2>
-                  </div>
-                  <div className="p-6">
-                    {loading ? (
-                      <div className="space-y-4">
-                        {[1, 2, 3].map(i => (
-                          <div key={i} className="border rounded-lg p-4 animate-pulse">
-                            <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                            <div className="h-3 bg-gray-200 rounded w-2/3 mb-3"></div>
-                            <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : pools.length === 0 ? (
-                      <div className="text-center py-8">
-                        <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Pools</h3>
-                        <p className="text-gray-600 mb-4">Join or create a pool to start saving money with other vendors</p>
-                        <Link to="/marketplace" className="text-orange-600 hover:text-orange-700 font-medium">
-                          Browse Available Pools →
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {pools.slice(0, 3).map(pool => (
-                          <div key={pool._id || pool.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                            <div className="flex justify-between items-start mb-2">
-                              <h3 className="font-semibold text-gray-900">{pool.name || 'Pool'}</h3>
-                              <span className={`text-xs px-2 py-1 rounded-full ${
-                                pool.status === 'active' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {pool.status || 'Active'}
-                              </span>
+              {/* Pools Section - Three columns side by side */}
+              <div className="lg:col-span-3">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  
+                  {/* Joined Pools */}
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-lg font-semibold text-gray-900">Joined Pools</h2>
+                      <p className="text-sm text-gray-600">Pools you participate in</p>
+                    </div>
+                    <div className="p-6">
+                      {loading ? (
+                        <div className="space-y-4">
+                          {[1, 2].map(i => (
+                            <div key={i} className="border rounded-lg p-3 animate-pulse">
+                              <div className="h-3 bg-gray-200 rounded mb-2"></div>
+                              <div className="h-2 bg-gray-200 rounded w-2/3"></div>
                             </div>
-                            <p className="text-sm text-gray-600 mb-3">
-                              {pool.memberCount || 0} vendors • {pool.description || 'No description'}
-                            </p>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-500">
-                                Target: ₹{pool.targetAmount?.toLocaleString() || '0'}
-                              </span>
-                              <div className="flex space-x-3">
+                          ))}
+                        </div>
+                      ) : userPools.length === 0 ? (
+                        <div className="text-center py-6">
+                          <Users className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                          <h3 className="text-sm font-medium text-gray-900 mb-1">No Joined Pools</h3>
+                          <p className="text-xs text-gray-600">You haven't joined any pools yet</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {userPools.slice(0, 4).map(pool => (
+                            <div key={pool._id || pool.id} className="border rounded-lg p-3 bg-green-50 border-green-200">
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-medium text-gray-900 text-sm">{pool.name || 'Pool'}</h3>
+                                <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                                  Joined
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 mb-2">
+                                Your: {pool.userQuantity}kg
+                              </p>
+                              <div className="mb-2">
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span>{pool.progressPercent}%</span>
+                                  <span>{pool.currentQuantity}/{pool.totalRequiredQuantity}kg</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                  <div 
+                                    className="bg-green-500 h-1.5 rounded-full" 
+                                    style={{ width: `${pool.progressPercent}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                              <Link 
+                                to={`/pool/${pool._id || pool.id}`} 
+                                className="text-green-600 hover:text-green-700 text-xs font-medium"
+                              >
+                                View Details →
+                              </Link>
+                            </div>
+                          ))}
+                          {userPools.length > 4 && (
+                            <div className="text-center pt-2">
+                              <Link to="/marketplace" className="text-green-600 hover:text-green-700 text-xs font-medium">
+                                View All ({userPools.length}) →
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Available Pools */}
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-lg font-semibold text-gray-900">Available Pools</h2>
+                      <p className="text-sm text-gray-600">Pools you can join</p>
+                    </div>
+                    <div className="p-6">
+                      {loading ? (
+                        <div className="space-y-4">
+                          {[1, 2].map(i => (
+                            <div key={i} className="border rounded-lg p-3 animate-pulse">
+                              <div className="h-3 bg-gray-200 rounded mb-2"></div>
+                              <div className="h-2 bg-gray-200 rounded w-2/3"></div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : otherPools.length === 0 ? (
+                        <div className="text-center py-6">
+                          <Package className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                          <h3 className="text-sm font-medium text-gray-900 mb-1">No Available Pools</h3>
+                          <p className="text-xs text-gray-600 mb-2">No new pools to join</p>
+                          <Link to="/create-pool" className="text-orange-600 hover:text-orange-700 font-medium text-xs">
+                            Create Pool →
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {otherPools.slice(0, 4).map(pool => (
+                            <div key={pool._id || pool.id} className="border rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-medium text-gray-900 text-sm">{pool.name || 'Pool'}</h3>
+                                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                                  Available
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 mb-2">
+                                {pool.memberCount || 0} vendors • ₹{pool.targetAmount?.toLocaleString() || '0'}
+                              </p>
+                              <div className="flex justify-between items-center">
                                 <button
                                   onClick={() => openJoinPoolModal(pool)}
-                                  className="bg-orange-500 hover:bg-orange-600 text-white text-sm px-3 py-1 rounded"
+                                  className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-1 rounded"
                                 >
-                                  Join Pool
+                                  Join
                                 </button>
                                 <Link 
                                   to={`/pool/${pool._id || pool.id}`} 
-                                  className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+                                  className="text-orange-600 hover:text-orange-700 text-xs font-medium"
                                 >
-                                  View Details
+                                  Details →
                                 </Link>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Vendor Quick Actions */}
-              <div className="space-y-6">
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-                  </div>
-                  <div className="p-6 space-y-3">
-                    <Link 
-                      to="/create-pool" 
-                      className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors text-center block"
-                    >
-                      Create New Pool
-                    </Link>
-                    <Link 
-                      to="/marketplace" 
-                      className="w-full border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center block"
-                    >
-                      Browse Marketplace
-                    </Link>
-                    <Link 
-                      to="/wallet" 
-                      className="w-full border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-center block"
-                    >
-                      Manage Wallet
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-lg shadow">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Spices order delivered</span>
-                        <span className="text-gray-400">2h ago</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">New vendor joined packaging pool</span>
-                        <span className="text-gray-400">5h ago</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment processed</span>
-                        <span className="text-gray-400">1d ago</span>
-                      </div>
+                          ))}
+                          {otherPools.length > 4 && (
+                            <div className="text-center pt-2">
+                              <Link to="/marketplace" className="text-orange-600 hover:text-orange-700 text-xs font-medium">
+                                View All ({otherPools.length}) →
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Created Pools */}
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-lg font-semibold text-gray-900">Created Pools</h2>
+                      <p className="text-sm text-gray-600">Pools you created</p>
+                    </div>
+                    <div className="p-6">
+                      {loading ? (
+                        <div className="space-y-4">
+                          {[1, 2].map(i => (
+                            <div key={i} className="border rounded-lg p-3 animate-pulse">
+                              <div className="h-3 bg-gray-200 rounded mb-2"></div>
+                              <div className="h-2 bg-gray-200 rounded w-2/3"></div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : createdPools.length === 0 ? (
+                        <div className="text-center py-6">
+                          <Plus className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                          <h3 className="text-sm font-medium text-gray-900 mb-1">No Created Pools</h3>
+                          <p className="text-xs text-gray-600 mb-2">You haven't created any pools yet</p>
+                          <Link to="/create-pool" className="text-orange-600 hover:text-orange-700 font-medium text-xs">
+                            Create First Pool →
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {createdPools.slice(0, 4).map(pool => (
+                            <div key={pool._id || pool.id} className="border rounded-lg p-3 bg-purple-50 border-purple-200">
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-medium text-gray-900 text-sm">{pool.name || 'Pool'}</h3>
+                                <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
+                                  Created
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 mb-2">
+                                {pool.memberCount || 0} members • {pool.progressPercent}% complete
+                              </p>
+                              <div className="mb-2">
+                                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                  <div 
+                                    className="bg-purple-500 h-1.5 rounded-full" 
+                                    style={{ width: `${pool.progressPercent}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                              <Link 
+                                to={`/pool/${pool._id || pool.id}`} 
+                                className="text-purple-600 hover:text-purple-700 text-xs font-medium"
+                              >
+                                Manage Pool →
+                              </Link>
+                            </div>
+                          ))}
+                          {createdPools.length > 4 && (
+                            <div className="text-center pt-2">
+                              <Link to="/marketplace" className="text-purple-600 hover:text-purple-700 text-xs font-medium">
+                                View All ({createdPools.length}) →
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                 </div>
               </div>
             </>
@@ -629,16 +806,24 @@ const Dashboard = () => {
                       onChange={(e) => setJoinQuantity(Math.max(1, parseInt(e.target.value) || 1))}
                       className="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-orange-200"
                     />
+                    {selectedPool && selectedPool.targetAmount && selectedPool.totalRequiredQuantity && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Price per kg: ₹{(selectedPool.targetAmount / selectedPool.totalRequiredQuantity).toFixed(2)}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="flex justify-between font-semibold text-lg mb-6 pt-2 border-t">
                     <span>Total Cost:</span>
-                    {selectedPool && (
+                    {selectedPool && selectedPool.targetAmount && selectedPool.totalRequiredQuantity ? (
                       <span>₹{(joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity)).toFixed(2)}</span>
+                    ) : (
+                      <span>₹{(joinQuantity * 25).toFixed(2)}</span>
                     )}
                   </div>
                   
-                  {walletBalance < (joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity)) && (
+                  {selectedPool && selectedPool.targetAmount && selectedPool.totalRequiredQuantity && 
+                   walletBalance < (joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity)) && (
                     <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm">
                       <AlertCircle className="inline-block mr-2 h-4 w-4" />
                       Insufficient wallet balance. Please add funds to your wallet.
@@ -656,9 +841,11 @@ const Dashboard = () => {
                   </button>
                   <button 
                     onClick={handleJoinPool}
-                    disabled={joinLoading || walletBalance < (joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity))}
+                    disabled={joinLoading || (selectedPool && selectedPool.targetAmount && selectedPool.totalRequiredQuantity && 
+                             walletBalance < (joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity)))}
                     className={`flex-1 py-2 rounded-lg text-white ${
-                      joinLoading || walletBalance < (joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity))
+                      joinLoading || (selectedPool && selectedPool.targetAmount && selectedPool.totalRequiredQuantity && 
+                                     walletBalance < (joinQuantity * (selectedPool.targetAmount / selectedPool.totalRequiredQuantity)))
                         ? 'bg-orange-300'
                         : 'bg-orange-500 hover:bg-orange-600'
                     }`}

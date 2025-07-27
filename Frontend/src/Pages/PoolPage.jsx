@@ -13,6 +13,8 @@ const PoolPage = () => {
   const [poolData, setPoolData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isCreator, setIsCreator] = useState(false);
+  const [endingPool, setEndingPool] = useState(false);
 
   useEffect(() => {
     fetchPoolData();
@@ -25,20 +27,42 @@ const PoolPage = () => {
       const pool = data.pool;
       
       if (pool) {
+        console.log('Pool data:', pool);
+        console.log('Current user:', user);
+        console.log('Pool createdBy:', pool.createdBy);
+        console.log('User ID:', user?.id);
+        console.log('User _id:', user?._id);
+        
         // Check if current user is already in the pool
         const userIsJoined = pool.joinedVendors?.some(vendor => 
-          vendor.vendorId?._id === user?.id || vendor.vendorId === user?.id
+          vendor.vendorId?._id === user?.id || vendor.vendorId === user?.id ||
+          vendor.vendorId?._id === user?._id || vendor.vendorId === user?._id
         );
         setIsJoined(userIsJoined);
+        
+        // Check if current user is the creator of the pool - Fixed logic
+        let userIsCreator = false;
+        if (pool.createdBy && user) {
+          // Handle different ID field variations
+          const userId = user.id || user._id;
+          const creatorId = typeof pool.createdBy === 'object' ? pool.createdBy._id : pool.createdBy;
+          
+          userIsCreator = creatorId === userId;
+          console.log('Creator check - CreatorId:', creatorId, 'UserId:', userId, 'IsCreator:', userIsCreator);
+        }
+        setIsCreator(userIsCreator);
+        
         setPoolData(pool);
       } else {
         setPoolData(mockPoolData);
+        setIsCreator(false);
       }
     } catch (err) {
       setError('Failed to load pool data');
       console.error('Pool error:', err);
       // Use mock data as fallback
       setPoolData(mockPoolData);
+      setIsCreator(false);
     } finally {
       setLoading(false);
     }
@@ -63,12 +87,49 @@ const PoolPage = () => {
 
     try {
       const result = await poolService.joinPool(id, quantityNum);
-      setIsJoined(true);
+      console.log('Join pool result:', result);
+      
+      // Clear the quantity input
+      setQuantity('');
+      
       alert(result.message || 'Successfully joined the pool!');
-      fetchPoolData(); // Refresh data
+      
+      // Refresh pool data to get updated information
+      await fetchPoolData();
     } catch (err) {
       console.error('Join pool error:', err);
       alert(err.message || 'Failed to join pool. Please try again.');
+    }
+  };
+
+  const handleEndPool = async () => {
+    if (!user || !isCreator) {
+      alert('Only the pool creator can end this pool');
+      return;
+    }
+
+    if (poolData?.isClosed) {
+      alert('This pool is already closed');
+      return;
+    }
+
+    const confirmEnd = window.confirm('Are you sure you want to end this pool? This action cannot be undone.');
+    if (!confirmEnd) return;
+
+    try {
+      setEndingPool(true);
+      const result = await poolService.endPool(id);
+      console.log('End pool result:', result);
+      
+      alert(result.message || 'Pool has been successfully ended!');
+      
+      // Refresh data to show updated status
+      await fetchPoolData();
+    } catch (err) {
+      console.error('End pool error:', err);
+      alert(err.message || 'Failed to end pool. Please try again.');
+    } finally {
+      setEndingPool(false);
     }
   };
 
@@ -176,6 +237,7 @@ const PoolPage = () => {
               <Link to="/" className="text-gray-700 hover:text-orange-500 transition-colors">Home</Link>
               <Link to="/dashboard" className="text-gray-700 hover:text-orange-500 transition-colors">Dashboard</Link>
               <Link to="/marketplace" className="text-gray-700 hover:text-orange-500 transition-colors">Marketplace</Link>
+              <Link to="/nearby" className="text-gray-700 hover:text-orange-500 transition-colors">Nearby</Link>
               <Link to="/wallet" className="text-gray-700 hover:text-orange-500 transition-colors">Wallet</Link>
               <Link to="/profile" className="bg-orange-500 text-white px-4 py-2 rounded-full hover:bg-orange-600 transition-colors">
                 Profile
@@ -235,6 +297,18 @@ const PoolPage = () => {
                   <div className="flex items-center text-green-600 bg-green-50 px-3 py-1 rounded-full">
                     <CheckCircle className="h-4 w-4 mr-1" />
                     <span className="text-sm font-medium">Joined</span>
+                  </div>
+                )}
+                {isCreator && (
+                  <div className="flex items-center text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                    <Users className="h-4 w-4 mr-1" />
+                    <span className="text-sm font-medium">Creator</span>
+                  </div>
+                )}
+                {poolData.isClosed && (
+                  <div className="flex items-center text-red-600 bg-red-50 px-3 py-1 rounded-full">
+                    <Clock className="h-4 w-4 mr-1" />
+                    <span className="text-sm font-medium">Closed</span>
                   </div>
                 )}
               </div>
@@ -395,7 +469,7 @@ const PoolPage = () => {
             </div>
 
             {/* Join Pool */}
-            {!isJoined && (
+            {!isJoined && !poolData.isClosed && !isCreator && (
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Join This Pool</h3>
                 <div className="space-y-4">
@@ -439,6 +513,47 @@ const PoolPage = () => {
                   >
                     Join Pool
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* End Pool - Only for creators */}
+            {isCreator && !poolData.isClosed && (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Pool Management</h3>
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      As the pool creator, you can end this pool at any time. This will close it to new members.
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={handleEndPool}
+                    disabled={endingPool}
+                    className="w-full bg-red-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-red-600 transition-colors disabled:bg-red-300"
+                  >
+                    {endingPool ? 'Ending Pool...' : 'End Pool'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Pool Closed Message */}
+            {poolData.isClosed && (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Pool Status</h3>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                  <Clock className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                  <h4 className="font-semibold text-red-800 mb-1">Pool Closed</h4>
+                  <p className="text-sm text-red-600">
+                    This pool is no longer accepting new members.
+                  </p>
+                  {poolData.closedAt && (
+                    <p className="text-xs text-red-500 mt-2">
+                      Closed on {new Date(poolData.closedAt).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               </div>
             )}

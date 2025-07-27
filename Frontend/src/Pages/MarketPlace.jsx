@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChefHat, Search, Filter, ShoppingCart, Star, MapPin, Clock, Plus, X, AlertCircle, CheckCircle } from 'lucide-react';
-import { productService, walletService } from '../services/apiServices.js';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import { ChefHat, Search, ShoppingCart, Star, MapPin, Clock, X, AlertCircle, CheckCircle } from 'lucide-react';
+import { productService, walletService } from '../services/apiServices';
+import { useAuth } from '../contexts/AuthContext';
 
 const MarketPlace = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -15,7 +15,7 @@ const MarketPlace = () => {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [purchaseStatus, setPurchaseStatus] = useState(null); // 'success', 'error', or null
+  const [purchaseStatus, setPurchaseStatus] = useState(null);
   const [purchaseMessage, setPurchaseMessage] = useState('');
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   
@@ -29,83 +29,98 @@ const MarketPlace = () => {
     }
   }, [isAuthenticated]);
 
-  const fetchProducts = async () => {
+const fetchProducts = async () => {
+  try {
+    setLoading(true);
+    const { products: apiProducts } = await productService.getAllProducts();
+
+    const transformedProducts = await Promise.all(apiProducts.map(async (product) => {
+      const price = Number(product.pricePerKg || 0);
+      const category = product.category?.toLowerCase() || 'other';
+      const location = await getSupplierLocation(product);  // <-- now awaited
+
+      return {
+        id: product._id,
+        _id: product._id,
+        name: product.name || 'Unnamed Product',
+        description: product.description || 'No description available.',
+        price,
+        originalPrice: Math.round(price * 1.4),
+        moq: `${product.minOrderQuantity || 1}kg minimum`,
+        supplier: getSupplierName(product),
+        rating: 4.3 + Math.random() * 0.7,
+        reviews: Math.floor(Math.random() * 200) + 30,
+        image: product.imageUrl || getProductImage(product.name, category),
+        category,
+        savings: calculateSavings(price),
+        location,  // ← readable address
+        delivery: getRandomDelivery(),
+        availableQuantity: product.availableQuantity ?? 0,
+      };
+    }));
+
+    setProducts(transformedProducts);
+  } catch (err) {
+    console.error("Product fetch failed:", err);
+    setError('Failed to load products - showing sample data');
+    setProducts(mockProducts);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+const getSupplierName = (product) => {
+  return product.supplier?.name || 'Local Supplier';
+};
+
+const getAddressFromCoordinates = async (lat, lng) => {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+  );
+  const data = await response.json();
+  return data.display_name || 'Address not found';
+};
+
+
+const getSupplierLocation = async (product) => {
+  const loc = product.supplier?.location;
+  if (loc && loc.length === 2) {
+    const [lng, lat] = loc;
     try {
-      setLoading(true);
-      setError('');
-      const data = await productService.getAllProducts();
-      if (data.products && data.products.length > 0) {
-        // Transform API data to match expected format
-        const transformedProducts = data.products.map((product, index) => ({
-          id: product._id || index + 1,
-          _id: product._id,
-          name: product.name,
-          price: product.pricePerKg,
-          originalPrice: Math.round(product.pricePerKg * 1.4), // Calculate 40% markup
-          moq: `${product.minOrderQuantity}kg minimum`,
-          supplier: product.supplierId?.name || 'Unknown Supplier',
-          rating: 4.5 + Math.random() * 0.5, // Random rating between 4.5-5.0
-          reviews: Math.floor(Math.random() * 200) + 50, // Random reviews 50-250
-          image: getProductImage(product.name),
-          category: getProductCategory(product.name),
-          savings: Math.round(((Math.round(product.pricePerKg * 1.4) - product.pricePerKg) / Math.round(product.pricePerKg * 1.4)) * 100),
-          location: getRandomLocation(),
-          delivery: getRandomDelivery()
-        }));
-        setProducts(transformedProducts);
-      } else {
-        // If no products from API, use mock data
-        setProducts(mockProducts);
-        setError('Using sample data - API products not available');
-      }
+      const address = await getAddressFromCoordinates(lat, lng);
+      return address;
     } catch (err) {
-      setError('Failed to load products from server - showing sample data');
-      console.error('Products fetch error:', err);
-      // Always fallback to mock data if API fails
-      setProducts(mockProducts);
-    } finally {
-      setLoading(false);
+      console.error("Geocoding error:", err);
+      return 'Location unavailable';
     }
-  };
+  }
+  return 'Nearby location';
+};
 
-  // Helper functions to generate missing data
-  const getProductImage = (name) => {
-    const imageMap = {
-      'onion': 'https://images.pexels.com/photos/533342/pexels-photo-533342.jpeg?auto=compress&cs=tinysrgb&w=400',
-      'potato': 'https://images.pexels.com/photos/144248/potatoes-vegetables-erdfrucht-bio-144248.jpeg?auto=compress&cs=tinysrgb&w=400',
-      'tomato': 'https://images.pexels.com/photos/1327838/pexels-photo-1327838.jpeg?auto=compress&cs=tinysrgb&w=400',
-      'spice': 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg?auto=compress&cs=tinysrgb&w=400',
-      'box': 'https://images.pexels.com/photos/4386431/pexels-photo-4386431.jpeg?auto=compress&cs=tinysrgb&w=400',
-      'plate': 'https://images.pexels.com/photos/6489663/pexels-photo-6489663.jpeg?auto=compress&cs=tinysrgb&w=400'
-    };
-    
-    for (const [key, url] of Object.entries(imageMap)) {
-      if (name.toLowerCase().includes(key)) return url;
-    }
-    return 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=400';
-  };
 
-  const getProductCategory = (name) => {
-    if (name.toLowerCase().includes('onion') || name.toLowerCase().includes('potato') || name.toLowerCase().includes('tomato')) {
-      return 'vegetables';
-    }
-    if (name.toLowerCase().includes('spice')) return 'spices';
-    if (name.toLowerCase().includes('box') || name.toLowerCase().includes('plate') || name.toLowerCase().includes('packaging')) {
-      return 'packaging';
-    }
-    return 'other';
-  };
 
-  const getRandomLocation = () => {
-    const locations = ['Mumbai', 'Delhi', 'Pune', 'Bangalore', 'Chennai', 'Kolkata'];
-    return locations[Math.floor(Math.random() * locations.length)];
-  };
 
-  const getRandomDelivery = () => {
-    const options = ['1-2 days', '2-3 days', '3-4 days', 'Same day'];
-    return options[Math.floor(Math.random() * options.length)];
+const getProductImage = (name = '', category = '') => {
+  const categoryMap = {
+    vegetables: 'https://images.pexels.com/photos/533342/pexels-photo-533342.jpeg',
+    spices: 'https://images.pexels.com/photos/1340116/pexels-photo-1340116.jpeg',
+    beverages: 'https://images.pexels.com/photos/5946623/pexels-photo-5946623.jpeg',
+    default: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg'
   };
-  
+  return categoryMap[category.toLowerCase()] || categoryMap.default;
+};
+
+const calculateSavings = (price) => {
+  const original = Math.round(price * 1.4);
+  return price ? Math.round(((original - price) / original) * 100) : 0;
+};
+
+const getRandomDelivery = () => {
+  const options = ['2-4 days delivery', 'Same day delivery', 'Fast delivery (1-2 days)', 'Within a week'];
+  return options[Math.floor(Math.random() * options.length)];
+};
+
   const fetchWalletBalance = async () => {
     try {
       const data = await walletService.getWalletBalance();
@@ -296,8 +311,8 @@ const MarketPlace = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
-      {/* Navigation */}
-      <nav className="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-50">
+
+       <nav className="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center space-x-2">
@@ -307,8 +322,9 @@ const MarketPlace = () => {
             <div className="hidden md:flex items-center space-x-8">
               <Link to="/" className="text-gray-700 hover:text-orange-500 transition-colors">Home</Link>
               <Link to="/marketplace" className="text-orange-500 font-medium">Marketplace</Link>
-              <Link to="/about" className="text-gray-700 hover:text-orange-500 transition-colors">About</Link>
-              <Link to="/contact" className="text-gray-700 hover:text-orange-500 transition-colors">Contact</Link>
+              {user && (
+                <Link to="/nearby" className="text-gray-700 hover:text-orange-500 transition-colors">Nearby</Link>
+              )}
               {user ? (
                 <Link to="/dashboard" className="bg-orange-500 text-white px-4 py-2 rounded-full hover:bg-orange-600 transition-colors">
                   Dashboard
@@ -324,14 +340,14 @@ const MarketPlace = () => {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Marketplace</h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Discover wholesale prices on quality ingredients, packaging, and equipment for your street food business
           </p>
         </div>
-
+      </div>
         {/* Search and Filters */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
@@ -412,195 +428,215 @@ const MarketPlace = () => {
           </div>
         ) : (
           /* Products Grid */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {sortedProducts.length === 0 ? (
-              <div className="col-span-full text-center py-12">
-                <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
-                <p className="text-gray-600">Try adjusting your search or filter criteria</p>
-              </div>
-            ) : (
-              sortedProducts.map(product => (
-            <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden group">
-              <div className="relative">
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
-                />
-                <div className="absolute top-4 left-4 bg-green-500 text-white px-2 py-1 rounded-full text-sm font-semibold">
-                  Save {typeof product.savings === 'string' ? product.savings : `${product.savings}%`}
-                </div>
-                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ShoppingCart className="h-5 w-5 text-orange-500" />
-                </div>
-              </div>
-
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
-                  <div className="flex items-center space-x-1">
-                    {renderStars(product.rating)}
-                    <span className="text-sm text-gray-600 ml-1">({product.reviews})</span>
-                  </div>
-                </div>
-
-                <p className="text-gray-600 text-sm mb-3">{product.supplier}</p>
-
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="text-2xl font-bold text-orange-500">
-                    {typeof product.price === 'string' ? product.price : `₹${product.price}/kg`}
-                  </span>
-                  <span className="text-sm text-gray-500 line-through">
-                    {typeof product.originalPrice === 'string' ? product.originalPrice : `₹${product.originalPrice}/kg`}
-                  </span>
-                </div>
-
-                <p className="text-sm text-gray-600 mb-4">{product.moq}</p>
-
-                <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                  <div className="flex items-center">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    {product.location}
-                  </div>
-                  <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-1" />
-                    {product.delivery}
-                  </div>
-                </div>
-
-                <div className="flex space-x-2">
-                  <button 
-                    className="flex-1 bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
-                    onClick={() => handleBuyNow(product)}
-                  >
-                    Buy Now
-                  </button>
-                  <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <Star className="h-5 w-5 text-gray-400" />
-                  </button>
-                </div>
-              </div>
-            </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-      
-      {/* Purchase Modal */}
-      {showPurchaseModal && selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Complete Purchase</h3>
-              <button 
-                onClick={() => {
-                  if (!purchaseLoading) setShowPurchaseModal(false);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            
-            {purchaseStatus === 'success' ? (
-              <div className="text-center py-4">
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-green-800">{purchaseMessage}</h3>
-                <p className="mt-2 text-gray-600">Your new wallet balance: ₹{walletBalance}</p>
-              </div>
-            ) : purchaseStatus === 'error' ? (
-              <div className="text-center py-4">
-                <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-red-800">Purchase Failed</h3>
-                <p className="mt-2 text-gray-600">{purchaseMessage}</p>
-                <button 
-                  onClick={() => setPurchaseStatus(null)} 
-                  className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="mb-6">
-                  <div className="flex items-center mb-4">
-                    <img 
-                      src={selectedProduct.image} 
-                      alt={selectedProduct.name} 
-                      className="w-16 h-16 object-cover rounded mr-4"
-                    />
-                    <div>
-                      <h4 className="font-semibold">{selectedProduct.name}</h4>
-                      <p className="text-sm text-gray-500">{selectedProduct.supplier}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between mb-2">
-                    <span className="text-gray-600">Price per kg:</span>
-                    <span className="font-medium">₹{selectedProduct.price}</span>
-                  </div>
-                  
-                  <div className="flex justify-between mb-4">
-                    <span className="text-gray-600">Your wallet balance:</span>
-                    <span className="font-medium">₹{walletBalance}</span>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-gray-600 mb-2">Quantity (kg):</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      value={quantity} 
-                      onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-orange-200"
-                    />
-                    {selectedProduct.moq && (
-                      <p className="text-xs text-gray-500 mt-1">Minimum order: {selectedProduct.moq}</p>
-                    )}
-                  </div>
-                  
-                  <div className="flex justify-between font-semibold text-lg mb-6 pt-2 border-t">
-                    <span>Total Amount:</span>
-                    <span>₹{(selectedProduct.price * quantity).toFixed(2)}</span>
-                  </div>
-                  
-                  {walletBalance < (selectedProduct.price * quantity) && (
-                    <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm">
-                      <AlertCircle className="inline-block mr-2 h-4 w-4" />
-                      Insufficient wallet balance. Please add funds to your wallet.
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex space-x-4">
-                  <button 
-                    onClick={() => setShowPurchaseModal(false)}
-                    className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                    disabled={purchaseLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handlePurchase}
-                    disabled={purchaseLoading || walletBalance < (selectedProduct.price * quantity)}
-                    className={`flex-1 py-2 rounded-lg text-white ${
-                      purchaseLoading || walletBalance < (selectedProduct.price * quantity)
-                        ? 'bg-orange-300'
-                        : 'bg-orange-500 hover:bg-orange-600'
-                    }`}
-                  >
-                    {purchaseLoading ? 'Processing...' : 'Confirm Purchase'}
-                  </button>
-                </div>
-              </>
-            )}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+  {sortedProducts.length === 0 ? (
+    <div className="col-span-full text-center py-12">
+      <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+      <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+      <p className="text-gray-600">Try adjusting your search or filter criteria</p>
+    </div>
+  ) : (
+    sortedProducts.map(product => (
+      <div key={product._id || product.id} className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden group">
+        <div className="relative">
+          <img
+            src={product.image || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg'}
+            alt={product.name || 'Product image'}
+            className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
+            onError={(e) => {
+              e.target.src = 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg';
+            }}
+          />
+          <div className="absolute top-4 left-4 bg-green-500 text-white px-2 py-1 rounded-full text-sm font-semibold">
+            Save {product.savings}%
           </div>
         </div>
-      )}
 
-      {/* Footer */}
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {product.name || 'Unnamed Product'}
+            </h3>
+            <div className="flex items-center space-x-1">
+              {renderStars(product.rating || 0)}
+              <span className="text-sm text-gray-600 ml-1">
+                ({product.reviews || 0})
+              </span>
+            </div>
+          </div>
+
+          <p className="text-gray-600 text-sm mb-3">
+            {product.supplier || 'Supplier not specified'}
+          </p>
+
+          <div className="flex items-center space-x-2 mb-3">
+            <span className="text-2xl font-bold text-orange-500">
+              ₹{product.price || 0}/kg
+            </span>
+            {product.originalPrice && (
+              <span className="text-sm text-gray-500 line-through">
+                ₹{product.originalPrice}/kg
+              </span>
+            )}
+          </div>
+
+          <p className="text-sm text-gray-600 mb-4">
+            {product.moq || 'No minimum order specified'}
+          </p>
+
+          <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+            <div className="flex items-center">
+              <MapPin className="h-4 w-4 mr-1" />
+              {product.location || 'Location not specified'}
+            </div>
+            <div className="flex items-center">
+              <Clock className="h-4 w-4 mr-1" />
+              {product.delivery || 'Delivery time not specified'}
+            </div>
+          </div>
+
+          <button 
+            className="w-full bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+            onClick={() => handleBuyNow(product)}
+          >
+            Buy Now
+          </button>
+        </div>
+      </div>
+    ))
+  )}
+</div>
+        )}
+{/* Purchase Modal */}
+{showPurchaseModal && selectedProduct && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-semibold text-gray-900">Complete Purchase</h3>
+        <button 
+          onClick={() => !purchaseLoading && setShowPurchaseModal(false)}
+          className="text-gray-500 hover:text-gray-700"
+          disabled={purchaseLoading}
+        >
+          <X size={24} />
+        </button>
+      </div>
+      
+      {purchaseStatus === 'success' ? (
+        <div className="text-center py-4">
+          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-green-800">{purchaseMessage}</h3>
+          <p className="mt-2 text-gray-600">Your new wallet balance: ₹{walletBalance}</p>
+          <button
+            onClick={() => setShowPurchaseModal(false)}
+            className="mt-4 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+          >
+            Close
+          </button>
+        </div>
+      ) : purchaseStatus === 'error' ? (
+        <div className="text-center py-4">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-red-800">Purchase Failed</h3>
+          <p className="mt-2 text-gray-600">{purchaseMessage}</p>
+          <button 
+            onClick={() => setPurchaseStatus(null)} 
+            className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          >
+            Try Again
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="mb-6">
+            <div className="flex items-center mb-4">
+              <img 
+                src={selectedProduct.image || 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg'}
+                alt={selectedProduct.name}
+                className="w-16 h-16 object-cover rounded mr-4"
+                onError={(e) => {
+                  e.target.src = 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg';
+                }}
+              />
+              <div>
+                <h4 className="font-semibold">{selectedProduct.name}</h4>
+                <p className="text-sm text-gray-500">
+                  {selectedProduct.supplier || 'Supplier not specified'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-between mb-2">
+              <span className="text-gray-600">Price per kg:</span>
+              <span className="font-medium">₹{selectedProduct.price || 0}</span>
+            </div>
+            
+            <div className="flex justify-between mb-4">
+              <span className="text-gray-600">Your wallet balance:</span>
+              <span className="font-medium">₹{walletBalance}</span>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-gray-600 mb-2">Quantity (kg):</label>
+              <input 
+                type="number" 
+                min="1"
+                value={quantity} 
+                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:ring-orange-200"
+              />
+              {selectedProduct.moq && (
+                <p className="text-xs text-gray-500 mt-1">Minimum order: {selectedProduct.moq}</p>
+              )}
+            </div>
+            
+            <div className="flex justify-between font-semibold text-lg mb-6 pt-2 border-t">
+              <span>Total Amount:</span>
+              <span>₹{(selectedProduct.price * quantity).toFixed(2)}</span>
+            </div>
+            
+            {walletBalance < (selectedProduct.price * quantity) && (
+              <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-sm">
+                <AlertCircle className="inline-block mr-2 h-4 w-4" />
+                Insufficient wallet balance. Please add funds to your wallet.
+              </div>
+            )}
+          </div>
+          
+          <div className="flex space-x-4">
+            <button 
+              onClick={() => setShowPurchaseModal(false)}
+              className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              disabled={purchaseLoading}
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handlePurchase}
+              disabled={purchaseLoading || walletBalance < (selectedProduct.price * quantity)}
+              className={`flex-1 py-2 rounded-lg text-white ${
+                purchaseLoading || walletBalance < (selectedProduct.price * quantity)
+                  ? 'bg-orange-300 cursor-not-allowed'
+                  : 'bg-orange-500 hover:bg-orange-600'
+              }`}
+            >
+              {purchaseLoading ? (
+                <span className="inline-flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : 'Confirm Purchase'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
+       {/* Footer */}
       <footer className="bg-gray-800 text-gray-300 mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid md:grid-cols-4 gap-8">
@@ -626,18 +662,15 @@ const MarketPlace = () => {
             <div>
               <h4 className="font-semibold text-white mb-4">Support</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Help Center</a></li>
-                <li><Link to="/contact" className="hover:text-orange-500 transition-colors">Contact Us</Link></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Community</a></li>
+                <li><Link to="/about" className="hover:text-orange-500 transition-colors">About</Link></li>
+                <li><Link to="/contact" className="hover:text-orange-500 transition-colors">Contact</Link></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-semibold text-white mb-4">Legal</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Cookie Policy</a></li>
+                <li><Link to="/auth" className="hover:text-orange-500 transition-colors">Sign In</Link></li>
               </ul>
             </div>
           </div>

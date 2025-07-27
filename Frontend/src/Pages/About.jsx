@@ -15,6 +15,7 @@ const About = () => {
             </Link>
             <div className="hidden md:flex items-center space-x-8">
               <Link to="/" className="text-gray-700 hover:text-orange-500 transition-colors">Home</Link>
+              <Link to="/marketplace" className="text-gray-700 hover:text-orange-500 transition-colors">Marketplace</Link>
               <Link to="/about" className="text-orange-500 font-medium">About</Link>
               <Link to="/contact" className="text-gray-700 hover:text-orange-500 transition-colors">Contact</Link>
               <Link to="/auth" className="bg-orange-500 text-white px-4 py-2 rounded-full hover:bg-orange-600 transition-colors">
@@ -223,7 +224,7 @@ const About = () => {
               <h4 className="font-semibold text-white mb-4">Platform</h4>
               <ul className="space-y-2">
                 <li><Link to="/" className="hover:text-orange-500 transition-colors">Home</Link></li>
-                <li><Link to="/about" className="hover:text-orange-500 transition-colors">About</Link></li>
+                <li><Link to="/marketplace" className="hover:text-orange-500 transition-colors">Marketplace</Link></li>
                 <li><Link to="/dashboard" className="hover:text-orange-500 transition-colors">Dashboard</Link></li>
               </ul>
             </div>
@@ -231,18 +232,15 @@ const About = () => {
             <div>
               <h4 className="font-semibold text-white mb-4">Support</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Help Center</a></li>
-                <li><Link to="/contact" className="hover:text-orange-500 transition-colors">Contact Us</Link></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Community</a></li>
+                <li><Link to="/about" className="hover:text-orange-500 transition-colors">About</Link></li>
+                <li><Link to="/contact" className="hover:text-orange-500 transition-colors">Contact</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Legal</h4>
+              <h4 className="font-semibold text-white mb-4">Account</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-orange-500 transition-colors">Cookie Policy</a></li>
+                <li><Link to="/auth" className="hover:text-orange-500 transition-colors">Sign In</Link></li>
               </ul>
             </div>
           </div>

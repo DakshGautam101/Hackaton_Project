@@ -8,6 +8,7 @@ const CreatePool = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     productId: '',
@@ -32,17 +33,15 @@ const CreatePool = () => {
 
   const fetchProducts = async () => {
     try {
+      setProductsLoading(true);
       const data = await productService.getAllProducts();
+      console.log('Fetched products:', data); // Debug log to see actual structure
       setProducts(data.products || []);
     } catch (err) {
       console.error('Failed to fetch products:', err);
-      // Fallback to mock products
-      setProducts([
-        { _id: '1', name: 'Fresh Onions', price: 25, originalPrice: 35, supplier: 'Fresh Farms Co.' },
-        { _id: '2', name: 'Premium Potatoes', price: 18, originalPrice: 25, supplier: 'AgriSource Ltd.' },
-        { _id: '3', name: 'Quality Tomatoes', price: 30, originalPrice: 40, supplier: 'Organic Growers' },
-        { _id: '4', name: 'Mixed Spices', price: 120, originalPrice: 150, supplier: 'Spice Masters' }
-      ]);
+      setProducts([]); // Set empty array instead of mock data
+    } finally {
+      setProductsLoading(false);
     }
   };
 
@@ -164,18 +163,30 @@ const CreatePool = () => {
                     name="productId"
                     value={formData.productId}
                     onChange={handleChange}
+                    disabled={productsLoading}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none ${
                       errors.productId ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    } ${productsLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    <option value="">Choose a product...</option>
-                    {products.map(product => (
+                    <option value="">
+                      {productsLoading ? 'Loading products...' : 'Choose a product...'}
+                    </option>
+                    {!productsLoading && products.length === 0 && (
+                      <option value="" disabled>No products available</option>
+                    )}
+                    {!productsLoading && products.map(product => (
                       <option key={product._id} value={product._id}>
-                        {product.name} - ₹{product.price}/kg (Save ₹{product.originalPrice - product.price}/kg)
+                        {product.name} - ₹{product.pricePerKg || product.price || 0}/kg
+                        {product.supplierId?.username && ` by ${product.supplierId.username}`}
                       </option>
                     ))}
                   </select>
                   {errors.productId && <p className="text-red-500 text-sm mt-1">{errors.productId}</p>}
+                  {!productsLoading && products.length === 0 && (
+                    <p className="text-amber-600 text-sm mt-1">
+                      No products available. Suppliers need to add products first.
+                    </p>
+                  )}
                 </div>
 
                 {/* Quantities */}
@@ -299,22 +310,33 @@ const CreatePool = () => {
                 <div className="space-y-3">
                   <div>
                     <h4 className="font-medium text-gray-900">{selectedProduct.name}</h4>
-                    <p className="text-sm text-gray-600">{selectedProduct.supplier}</p>
+                    <p className="text-sm text-gray-600">
+                      {selectedProduct.supplierId?.username || selectedProduct.supplier || 'Unknown Supplier'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Category: {selectedProduct.category || 'Other'}
+                    </p>
                   </div>
                   
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span>Bulk Price:</span>
-                      <span className="font-semibold text-orange-600">₹{selectedProduct.price}/kg</span>
+                      <span>Price per kg:</span>
+                      <span className="font-semibold text-orange-600">
+                        ₹{selectedProduct.pricePerKg || selectedProduct.price || 0}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Regular Price:</span>
-                      <span className="line-through text-gray-500">₹{selectedProduct.originalPrice}/kg</span>
+                      <span>Min Order Quantity:</span>
+                      <span className="font-semibold">
+                        {selectedProduct.minOrderQuantity || 'Not specified'} kg
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Savings per kg:</span>
-                      <span className="font-semibold text-green-600">₹{selectedProduct.originalPrice - selectedProduct.price}</span>
-                    </div>
+                    {selectedProduct.description && (
+                      <div className="pt-2 border-t">
+                        <span className="text-gray-600 text-xs">Description:</span>
+                        <p className="text-gray-700 text-sm">{selectedProduct.description}</p>
+                      </div>
+                    )}
                   </div>
 
                   {formData.totalRequiredQuantity && (
@@ -324,9 +346,9 @@ const CreatePool = () => {
                         <span className="font-semibold">{formData.totalRequiredQuantity} kg</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span>Total Savings:</span>
-                        <span className="font-semibold text-green-600">
-                          ₹{((selectedProduct.originalPrice - selectedProduct.price) * formData.totalRequiredQuantity).toLocaleString()}
+                        <span>Estimated Total Cost:</span>
+                        <span className="font-semibold text-orange-600">
+                          ₹{((selectedProduct.pricePerKg || selectedProduct.price || 0) * formData.totalRequiredQuantity).toLocaleString()}
                         </span>
                       </div>
                     </div>

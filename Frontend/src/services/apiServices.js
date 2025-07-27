@@ -9,7 +9,7 @@ export const productService = {
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to fetch products');
     }
-  },
+  },  
 
   // Get product by ID
   getProductById: async (id) => {
@@ -100,6 +100,16 @@ export const poolService = {
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Failed to join pool');
+    }
+  },
+
+  // End pool (only for pool creator)
+  endPool: async (poolId) => {
+    try {
+      const response = await api.patch(`/pools/${poolId}/end`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || 'Failed to end pool');
     }
   },
 };

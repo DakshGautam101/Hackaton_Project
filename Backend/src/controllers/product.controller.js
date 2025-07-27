@@ -41,15 +41,28 @@ export const createProduct = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 export const getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find().populate('supplierId', 'name');
-    res.status(200).json({ products });
+    const products = await Product.find().populate('supplierId', 'username location');
+
+    const productsWithSupplierInfo = products.map(product => {
+      const { supplierId } = product;
+
+      return {
+        ...product.toObject(),
+        supplier: {
+          name: supplierId?.username || 'Unknown',
+          location: supplierId?.location?.coordinates || [],
+        }
+      };
+    });
+
+    res.status(200).json({ products: productsWithSupplierInfo });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 export const getProductById = async (req, res) => {
   try {

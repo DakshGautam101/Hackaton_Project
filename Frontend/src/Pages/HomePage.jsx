@@ -57,21 +57,13 @@ export const HomePage = () => {
             <div className="hidden md:flex items-center space-x-4 lg:space-x-8">
               <a href="#how-it-works" className="text-gray-700 hover:text-orange-500 transition-colors">How It Works</a>
               <Link to="/marketplace" className="text-gray-700 hover:text-orange-500 transition-colors">Marketplace</Link>
+              <Link to="/about" className="text-gray-700 hover:text-orange-500 transition-colors">About</Link>
+              <Link to="/contact" className="text-gray-700 hover:text-orange-500 transition-colors">Contact</Link>
+              {isAuthenticated && <Link to="/nearby" className="text-gray-700 hover:text-orange-500 transition-colors">Nearby</Link>}
               {isAuthenticated && <Link to="/dashboard" className="text-gray-700 hover:text-orange-500 transition-colors">Dashboard</Link>}
-              {isAuthenticated && user?.role === 'Vendor' && (
-                <Link to="/create-pool" className="text-gray-700 hover:text-orange-500 transition-colors">Create Pool</Link>
-              )}
-              {isAuthenticated && user?.role === 'Supplier' && (
-                <Link to="/add-product" className="text-gray-700 hover:text-orange-500 transition-colors">Add Product</Link>
-              )}
               {!isAuthenticated && (
                 <Link to="/auth" className="bg-orange-500 text-white px-4 py-2 rounded-full hover:bg-orange-600 transition-colors text-sm whitespace-nowrap">
                   Get Started
-                </Link>
-              )}
-              {isAuthenticated && (
-                <Link to="/nearby" className="bg-orange-500 text-white px-4 py-2 rounded-full hover:bg-orange-600 transition-colors text-sm whitespace-nowrap">
-                  Nearby
                 </Link>
               )}
               {isAuthenticated && (
@@ -132,6 +124,29 @@ export const HomePage = () => {
               >
                 Marketplace
               </Link>
+              <Link 
+                to="/about" 
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-500 hover:bg-orange-50"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                About
+              </Link>
+              <Link 
+                to="/contact" 
+                className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-500 hover:bg-orange-50"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Contact
+              </Link>
+              {isAuthenticated && (
+                <Link 
+                  to="/nearby" 
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-500 hover:bg-orange-50"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Nearby
+                </Link>
+              )}
               {isAuthenticated && (
                 <Link 
                   to="/dashboard" 
@@ -141,24 +156,6 @@ export const HomePage = () => {
                   Dashboard
                 </Link>
               )}
-              {isAuthenticated && user?.role === 'Vendor' && (
-                <Link 
-                  to="/create-pool" 
-                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-500 hover:bg-orange-50"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Create Pool
-                </Link>
-              )}
-              {isAuthenticated && user?.role === 'Supplier' && (
-                <Link 
-                  to="/add-product" 
-                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-500 hover:bg-orange-50"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Add Product
-                </Link>
-              )}
               {!isAuthenticated && (
                 <Link 
                   to="/auth" 
@@ -166,15 +163,6 @@ export const HomePage = () => {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Get Started
-                </Link>
-              )}
-              {!isAuthenticated && (
-                <Link 
-                  to="/nearby" 
-                  className="block px-3 py-2 rounded-md text-base font-medium text-white bg-orange-500 hover:bg-orange-600 mt-2"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Nearby Vendors
                 </Link>
               )}
               {isAuthenticated && (
@@ -538,16 +526,15 @@ export const HomePage = () => {
               <ul className="space-y-2">
                 <li><a href="#how-it-works" className="hover:text-orange-500 transition-colors text-xs md:text-sm">How It Works</a></li>
                 <li><Link to="/marketplace" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Marketplace</Link></li>
-                <li><a href="#testimonials" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Success Stories</a></li>
+                <li><Link to="/dashboard" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Dashboard</Link></li>
               </ul>
             </div>
 
             <div>
               <h4 className="font-semibold text-white mb-3 md:mb-4 text-sm md:text-base">Support</h4>
               <ul className="space-y-2">
-                <li><Link to="/dashboard" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Dashboard</Link></li>
-                <li><Link to="/contact" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Contact Us</Link></li>
-                <li><Link to="/profile" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Profile</Link></li>
+                <li><Link to="/about" className="hover:text-orange-500 transition-colors text-xs md:text-sm">About</Link></li>
+                <li><Link to="/contact" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Contact</Link></li>
               </ul>
             </div>
 
@@ -555,17 +542,10 @@ export const HomePage = () => {
               <h4 className="font-semibold text-white mb-3 md:mb-4 text-sm md:text-base">Account</h4>
               <ul className="space-y-2">
                 {!isAuthenticated ? (
-                  <>
-                    <li><Link to="/auth" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Login</Link></li>
-                    <li><Link to="/auth" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Register</Link></li>
-                  </>
+                  <li><Link to="/auth" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Sign In</Link></li>
                 ) : (
-                  <>
-                    <li><Link to="/profile" className="hover:text-orange-500 transition-colors text-xs md:text-sm">My Profile</Link></li>
-                    <li><Link onClick={() => logout()} to="/" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Logout</Link></li>
-                  </>
+                  <li><Link to="/profile" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Profile</Link></li>
                 )}
-                <li><Link to="/wallet" className="hover:text-orange-500 transition-colors text-xs md:text-sm">Wallet</Link></li>
               </ul>
             </div>
           </div>
